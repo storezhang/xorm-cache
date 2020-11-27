@@ -13,9 +13,34 @@ XORM的缓存
 ```go
 Engine.SetDefaultCacher(cache.NewRedisCache(
     &redis.Options{
-        Addr:               conf.C.Cache.Redis.Addr,
-        Password:           conf.C.Cache.Redis.Password,
-        DB:                 conf.C.Cache.Redis.DB,
+        Addr:     addr,
+        Password: password,
+        DB:       db,
     },
+))
+```
+
+### 增加过期时间设置
+如果不设置过期时间，系统会设置一个默认的过期时间：5min（5分钟）
+```go
+Engine.SetDefaultCacher(cache.NewRedisCache(
+    &redis.Options{
+        Addr:     addr,
+        Password: password,
+        DB:       db,
+    },
+    cache.WithExpiration(conf.C.Cache.Expiration),
+))
+```
+
+### 增加缓存前缀
+```go
+Engine.SetDefaultCacher(cache.NewRedisCache(
+    &redis.Options{
+        Addr:     addr,
+        Password: password,
+        DB:       db,
+    },
+    cache.WithPrefix(prefix),
 ))
 ```
