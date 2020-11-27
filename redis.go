@@ -43,7 +43,7 @@ func (rc *redisCache) GetBean(table string, id string) (value interface{}) {
 	return
 }
 
-func (rc *redisCache) PutIds(table, sql string, ids interface{}) {
+func (rc *redisCache) PutIds(table string, sql string, ids interface{}) {
 	sqlKey := rc.getSqlKey(table, sql)
 	rc.putObject(sqlKey, ids)
 }

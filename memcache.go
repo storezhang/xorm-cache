@@ -41,7 +41,7 @@ func (mc *memcacheCache) GetBean(table string, id string) (value interface{}) {
 	return
 }
 
-func (mc *memcacheCache) PutIds(table, sql string, ids interface{}) {
+func (mc *memcacheCache) PutIds(table string, sql string, ids interface{}) {
 	sqlKey := mc.getSqlKey(table, sql)
 	mc.putObject(sqlKey, ids)
 }
