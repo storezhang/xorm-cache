@@ -7,20 +7,14 @@ import (
 	`fmt`
 	`hash/crc32`
 	`reflect`
-	`time`
 	`unsafe`
 
 	`github.com/go-redis/redis/v8`
 )
 
-const (
-	beanPrefix = "bean"
-	sqlPrefix  = "sql"
-)
-
 type redisCache struct {
-	client     *redis.Client
-	expiration time.Duration
+	client  *redis.Client
+	options options
 }
 
 // NewRedisCache 创建一个基于Redis存储的分布式缓存
@@ -31,102 +25,111 @@ func NewRedisCache(redisOptions *redis.Options, options ...option) *redisCache {
 	}
 
 	return &redisCache{
-		client:     redis.NewClient(redisOptions),
-		expiration: appliedOptions.Expiration,
+		client:  redis.NewClient(redisOptions),
+		options: appliedOptions,
 	}
 }
 
-func (c *redisCache) getBeanKey(table string, id string) string {
-	return fmt.Sprintf("%s:%s:%s", beanPrefix, table, id)
+func (rc *redisCache) getBeanKey(table string, id string) (key string) {
+	if "" != rc.options.Prefix {
+		key = fmt.Sprintf("%s:%s:%s:%s", beanPrefix, rc.options.Prefix, table, id)
+	} else {
+		key = fmt.Sprintf("%s:%s:%s", beanPrefix, table, id)
+	}
+
+	return
 }
 
-func (c *redisCache) getSqlKey(table string, sql string) string {
-	return fmt.Sprintf("%s:%s:%d", sqlPrefix, table, crc32.ChecksumIEEE([]byte(sql)))
+func (rc *redisCache) getSqlKey(table string, sql string) (key string) {
+	if "" != rc.options.Prefix {
+		key = fmt.Sprintf("%s:%s:%s:%d", sqlPrefix, rc.options.Prefix, table, crc32.ChecksumIEEE([]byte(sql)))
+	} else {
+		key = fmt.Sprintf("%s:%s:%d", sqlPrefix, table, crc32.ChecksumIEEE([]byte(sql)))
+	}
+
+	return
 }
 
-func (c *redisCache) getObject(key string) (value interface{}) {
-	data, err := c.client.Get(context.Background(), key).Bytes()
+func (rc *redisCache) getObject(key string) (value interface{}) {
+	data, err := rc.client.Get(context.Background(), key).Bytes()
 	if nil != err {
 		return
 	}
-	value, err = c.deserialize(data)
+	value, err = rc.deserialize(data)
 
 	return
 }
 
-func (c *redisCache) GetIds(table string, sql string) (value interface{}) {
-	sqlKey := c.getSqlKey(table, sql)
-	value = c.getObject(sqlKey)
+func (rc *redisCache) GetIds(table string, sql string) (value interface{}) {
+	sqlKey := rc.getSqlKey(table, sql)
+	value = rc.getObject(sqlKey)
 
 	return
 }
 
-func (c *redisCache) GetBean(table string, id string) (value interface{}) {
-	beanKey := c.getBeanKey(table, id)
-	value = c.getObject(beanKey)
+func (rc *redisCache) GetBean(table string, id string) (value interface{}) {
+	beanKey := rc.getBeanKey(table, id)
+	value = rc.getObject(beanKey)
 
 	return
 }
 
-func (c *redisCache) putObject(key string, value interface{}) {
+func (rc *redisCache) putObject(key string, value interface{}) {
 	var (
 		data []byte
 		err  error
 	)
-	if data, err = c.serialize(value); nil != err {
+	if data, err = rc.serialize(value); nil != err {
 		return
 	}
 
-	if 0 == c.expiration {
-		c.expiration = time.Duration(-1)
-	}
-	_, _ = c.client.SetEX(context.Background(), key, data, c.expiration).Result()
+	_, _ = rc.client.SetEX(context.Background(), key, data, rc.options.Expiration).Result()
 }
 
-func (c *redisCache) PutIds(table, sql string, ids interface{}) {
-	sqlKey := c.getSqlKey(table, sql)
-	c.putObject(sqlKey, ids)
+func (rc *redisCache) PutIds(table, sql string, ids interface{}) {
+	sqlKey := rc.getSqlKey(table, sql)
+	rc.putObject(sqlKey, ids)
 }
 
-func (c *redisCache) PutBean(table string, id string, obj interface{}) {
-	beanKey := c.getBeanKey(table, id)
-	c.putObject(beanKey, obj)
+func (rc *redisCache) PutBean(table string, id string, obj interface{}) {
+	beanKey := rc.getBeanKey(table, id)
+	rc.putObject(beanKey, obj)
 }
 
-func (c *redisCache) delObject(key string) (err error) {
-	_, err = c.client.Del(context.Background(), key).Result()
+func (rc *redisCache) delObject(key string) (err error) {
+	_, err = rc.client.Del(context.Background(), key).Result()
 
 	return
 }
 
-func (c *redisCache) delObjects(key string) (err error) {
+func (rc *redisCache) delObjects(key string) (err error) {
 	var keys []string
-	if keys, err = c.client.Keys(context.Background(), key).Result(); nil != err {
+	if keys, err = rc.client.Keys(context.Background(), key).Result(); nil != err {
 		return
 	}
-	c.client.Del(context.Background(), keys...)
+	rc.client.Del(context.Background(), keys...)
 
 	return
 }
 
-func (c *redisCache) DelIds(table string, sql string) {
-	_ = c.delObject(c.getSqlKey(table, sql))
+func (rc *redisCache) DelIds(table string, sql string) {
+	_ = rc.delObject(rc.getSqlKey(table, sql))
 }
 
-func (c *redisCache) DelBean(table string, id string) {
-	_ = c.delObject(c.getBeanKey(table, id))
+func (rc *redisCache) DelBean(table string, id string) {
+	_ = rc.delObject(rc.getBeanKey(table, id))
 }
 
-func (c *redisCache) ClearIds(table string) {
-	_ = c.delObjects(fmt.Sprintf("%s:%s:*", sqlPrefix, table))
+func (rc *redisCache) ClearIds(table string) {
+	_ = rc.delObjects(fmt.Sprintf("%s:%s:*", sqlPrefix, table))
 }
 
-func (c *redisCache) ClearBeans(table string) {
-	_ = c.delObjects(c.getBeanKey(table, "*"))
+func (rc *redisCache) ClearBeans(table string) {
+	_ = rc.delObjects(rc.getBeanKey(table, "*"))
 }
 
-func (c *redisCache) serialize(obj interface{}) (data []byte, err error) {
-	c.registerGobConcreteType(obj)
+func (rc *redisCache) serialize(obj interface{}) (data []byte, err error) {
+	rc.registerGobConcreteType(obj)
 
 	if reflect.Struct == reflect.TypeOf(obj).Kind() {
 		err = fmt.Errorf("序列化只支持Struct指针")
@@ -145,7 +148,7 @@ func (c *redisCache) serialize(obj interface{}) (data []byte, err error) {
 	return
 }
 
-func (c *redisCache) deserialize(data []byte) (ptr interface{}, err error) {
+func (rc *redisCache) deserialize(data []byte) (ptr interface{}, err error) {
 	buffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(buffer)
 
@@ -167,7 +170,7 @@ func (c *redisCache) deserialize(data []byte) (ptr interface{}, err error) {
 	return
 }
 
-func (c *redisCache) registerGobConcreteType(obj interface{}) {
+func (rc *redisCache) registerGobConcreteType(obj interface{}) {
 	typeOf := reflect.TypeOf(obj)
 
 	switch typeOf.Kind() {
