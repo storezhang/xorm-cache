@@ -34,6 +34,7 @@ Engine.SetDefaultCacher(cache.NewRedisCache(
 ```
 
 ### 增加缓存前缀
+增加缓存前缀的意义在于，如果不同的系统之间需要使用同一套缓存存储方案，有可能会导致缓存Key之间的冲突，增加Prefix的意义就是，尽量减少这种冲突的可能性
 ```go
 Engine.SetDefaultCacher(cache.NewRedisCache(
     &redis.Options{
