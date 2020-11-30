@@ -81,7 +81,7 @@ func (rc *redisCache) DelBean(table string, id string) {
 }
 
 func (rc *redisCache) ClearIds(table string) {
-	if err := rc.delObjects(rc.getSqlKey(table, "*")); nil != err {
+	if err := rc.delObjects(rc.getAllSqlKey(table)); nil != err {
 		log.WithFields(log.Fields{
 			"table": table,
 			"error": err,
@@ -90,7 +90,7 @@ func (rc *redisCache) ClearIds(table string) {
 }
 
 func (rc *redisCache) ClearBeans(table string) {
-	if err := rc.delObjects(rc.getBeanKey(table, "*")); nil != err {
+	if err := rc.delObjects(rc.getAllTableKey(table)); nil != err {
 		log.WithFields(log.Fields{
 			"table": table,
 			"error": err,
@@ -167,6 +167,10 @@ func (rc *redisCache) delObjects(key string) (err error) {
 			"error": err,
 		}).Error("从Redis获得所有对象列表的Key出错")
 
+		return
+	}
+
+	if 0 == len(keys) {
 		return
 	}
 	if _, err := rc.client.Del(context.Background(), keys...).Result(); nil != err {
