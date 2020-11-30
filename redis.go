@@ -81,7 +81,7 @@ func (rc *redisCache) DelBean(table string, id string) {
 }
 
 func (rc *redisCache) ClearIds(table string) {
-	if err := rc.delObjects(rc.getTableKey(table)); nil != err {
+	if err := rc.delObjects(rc.getSqlKey(table, "*")); nil != err {
 		log.WithFields(log.Fields{
 			"table": table,
 			"error": err,
@@ -133,7 +133,7 @@ func (rc *redisCache) putObject(key string, value interface{}) {
 		return
 	}
 
-	if _, err := rc.client.SetEX(context.Background(), key, data, rc.options.Expiration).Result(); nil != err {
+	if err := rc.client.SetEX(context.Background(), key, data, rc.options.Expiration).Err(); nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
 			"value": value,

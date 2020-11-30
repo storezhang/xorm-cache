@@ -6,6 +6,8 @@ import (
 	`fmt`
 	`reflect`
 	`unsafe`
+
+	log `github.com/sirupsen/logrus`
 )
 
 type baseDistributedCache struct {
@@ -13,7 +15,9 @@ type baseDistributedCache struct {
 }
 
 func (bdc *baseDistributedCache) serialize(obj interface{}) (data []byte, err error) {
-	bdc.registerGobConcreteType(obj)
+	if err = bdc.registerGobConcreteType(obj); nil != err {
+		return
+	}
 
 	if reflect.Struct == reflect.TypeOf(obj).Kind() {
 		err = fmt.Errorf("序列化只支持Struct指针")
@@ -54,7 +58,7 @@ func (bdc *baseDistributedCache) deserialize(data []byte) (ptr interface{}, err 
 	return
 }
 
-func (bdc *baseDistributedCache) registerGobConcreteType(obj interface{}) {
+func (bdc *baseDistributedCache) registerGobConcreteType(obj interface{}) (err error) {
 	typeOf := reflect.TypeOf(obj)
 
 	switch typeOf.Kind() {
@@ -82,6 +86,9 @@ func (bdc *baseDistributedCache) registerGobConcreteType(obj interface{}) {
 		fallthrough
 	case reflect.Complex64, reflect.Complex128:
 		// do nothing since already registered known type
+	default:
+		err = fmt.Errorf("不支持的类型：%v", obj)
+		log.WithFields(log.Fields{"obj": obj}).Error("不支持的类型")
 	}
 
 	return
