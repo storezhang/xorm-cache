@@ -2,6 +2,12 @@ package cache
 
 import (
 	`github.com/bradfitz/gomemcache/memcache`
+	`xorm.io/xorm/caches`
+)
+
+var (
+	_ caches.Cacher = (*memcacheCache)(nil)
+	_               = NewMemcacheCache(nil)
 )
 
 type memcacheCache struct {
