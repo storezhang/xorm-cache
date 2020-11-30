@@ -143,6 +143,12 @@ func (rc *redisCache) putObject(key string, value interface{}) {
 }
 
 func (rc *redisCache) delObject(key string) (err error) {
+	if 0 == rc.client.Exists(context.Background(), key).Val() {
+		err = caches.ErrCacheMiss
+
+		return
+	}
+
 	if _, err := rc.client.Del(context.Background(), key).Result(); nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
