@@ -36,32 +36,32 @@ func NewRedisCache(client *redis.Client, options ...option) *redisCache {
 	}
 }
 
-func (rc *redisCache) GetIds(table string, sql string) (value interface{}) {
-	sqlKey := rc.getSqlKey(table, sql)
-	value = rc.getObject(sqlKey)
+func (r *redisCache) GetIds(table string, sql string) (value interface{}) {
+	sqlKey := r.getSqlKey(table, sql)
+	value = r.getObject(sqlKey)
 
 	return
 }
 
-func (rc *redisCache) GetBean(table string, id string) (value interface{}) {
-	beanKey := rc.getBeanKey(table, id)
-	value = rc.getObject(beanKey)
+func (r *redisCache) GetBean(table string, id string) (value interface{}) {
+	beanKey := r.getBeanKey(table, id)
+	value = r.getObject(beanKey)
 
 	return
 }
 
-func (rc *redisCache) PutIds(table string, sql string, ids interface{}) {
-	sqlKey := rc.getSqlKey(table, sql)
-	rc.putObject(sqlKey, ids)
+func (r *redisCache) PutIds(table string, sql string, ids interface{}) {
+	sqlKey := r.getSqlKey(table, sql)
+	r.putObject(sqlKey, ids)
 }
 
-func (rc *redisCache) PutBean(table string, id string, obj interface{}) {
-	beanKey := rc.getBeanKey(table, id)
-	rc.putObject(beanKey, obj)
+func (r *redisCache) PutBean(table string, id string, obj interface{}) {
+	beanKey := r.getBeanKey(table, id)
+	r.putObject(beanKey, obj)
 }
 
-func (rc *redisCache) DelIds(table string, sql string) {
-	if err := rc.delObject(rc.getSqlKey(table, sql)); nil != err {
+func (r *redisCache) DelIds(table string, sql string) {
+	if err := r.delObject(r.getSqlKey(table, sql)); nil != err {
 		log.WithFields(log.Fields{
 			"table": table,
 			"sql":   sql,
@@ -70,8 +70,8 @@ func (rc *redisCache) DelIds(table string, sql string) {
 	}
 }
 
-func (rc *redisCache) DelBean(table string, id string) {
-	if err := rc.delObject(rc.getBeanKey(table, id)); nil != err {
+func (r *redisCache) DelBean(table string, id string) {
+	if err := r.delObject(r.getBeanKey(table, id)); nil != err {
 		log.WithFields(log.Fields{
 			"table": table,
 			"id":    id,
@@ -80,8 +80,8 @@ func (rc *redisCache) DelBean(table string, id string) {
 	}
 }
 
-func (rc *redisCache) ClearIds(table string) {
-	if err := rc.delObjects(rc.getAllSqlKey(table)); nil != err {
+func (r *redisCache) ClearIds(table string) {
+	if err := r.delObjects(r.getAllSqlKey(table)); nil != err {
 		log.WithFields(log.Fields{
 			"table": table,
 			"error": err,
@@ -89,8 +89,8 @@ func (rc *redisCache) ClearIds(table string) {
 	}
 }
 
-func (rc *redisCache) ClearBeans(table string) {
-	if err := rc.delObjects(rc.getAllTableKey(table)); nil != err {
+func (r *redisCache) ClearBeans(table string) {
+	if err := r.delObjects(r.getAllTableKey(table)); nil != err {
 		log.WithFields(log.Fields{
 			"table": table,
 			"error": err,
@@ -98,17 +98,22 @@ func (rc *redisCache) ClearBeans(table string) {
 	}
 }
 
-func (rc *redisCache) getObject(key string) (value interface{}) {
-	data, err := rc.client.Get(context.Background(), key).Bytes()
+func (r *redisCache) getObject(key string) (value interface{}) {
+	data, err := r.client.Get(context.Background(), key).Bytes()
 	if nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
 			"error": err,
 		}).Error("从Redis取缓存出错")
+	}
 
+	// 如果没有数据，不用进行下一步
+	if 0 == len(data) {
 		return
 	}
-	if value, err = rc.deserialize(data); nil != err {
+
+	// 反序列化出真实的数据
+	if value, err = r.deserialize(data); nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
 			"error": err,
@@ -118,12 +123,12 @@ func (rc *redisCache) getObject(key string) (value interface{}) {
 	return
 }
 
-func (rc *redisCache) putObject(key string, value interface{}) {
+func (r *redisCache) putObject(key string, value interface{}) {
 	var (
 		data []byte
 		err  error
 	)
-	if data, err = rc.serialize(value); nil != err {
+	if data, err = r.serialize(value); nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
 			"value": value,
@@ -133,7 +138,7 @@ func (rc *redisCache) putObject(key string, value interface{}) {
 		return
 	}
 
-	if err := rc.client.SetEX(context.Background(), key, data, rc.options.Expiration).Err(); nil != err {
+	if err := r.client.SetEX(context.Background(), key, data, r.options.Expiration).Err(); nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
 			"value": value,
@@ -142,14 +147,14 @@ func (rc *redisCache) putObject(key string, value interface{}) {
 	}
 }
 
-func (rc *redisCache) delObject(key string) (err error) {
-	if 0 == rc.client.Exists(context.Background(), key).Val() {
+func (r *redisCache) delObject(key string) (err error) {
+	if 0 == r.client.Exists(context.Background(), key).Val() {
 		err = caches.ErrCacheMiss
 
 		return
 	}
 
-	if _, err := rc.client.Del(context.Background(), key).Result(); nil != err {
+	if _, err := r.client.Del(context.Background(), key).Result(); nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
 			"error": err,
@@ -159,9 +164,9 @@ func (rc *redisCache) delObject(key string) (err error) {
 	return
 }
 
-func (rc *redisCache) delObjects(key string) (err error) {
+func (r *redisCache) delObjects(key string) (err error) {
 	var keys []string
-	if keys, err = rc.client.Keys(context.Background(), key).Result(); nil != err {
+	if keys, err = r.client.Keys(context.Background(), key).Result(); nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
 			"error": err,
@@ -173,7 +178,7 @@ func (rc *redisCache) delObjects(key string) (err error) {
 	if 0 == len(keys) {
 		return
 	}
-	if _, err := rc.client.Del(context.Background(), keys...).Result(); nil != err {
+	if _, err := r.client.Del(context.Background(), keys...).Result(); nil != err {
 		log.WithFields(log.Fields{
 			"key":   key,
 			"error": err,
